@@ -1,0 +1,218 @@
+---
+title: "Statistical Analysis Report"
+subtitle: "Biochemical Assesment of serum Calcium, Albumin and Phosphatase in malaria-Infected and non-infected children" 
+author: "Abdul Baasit Ismail CEO Achiver analyst" 
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+---
+
+# Introduction
+
+This report provides a statistical analysis of serum calcium, albumin, and phosphate concentrations in malaria-infected and non-infected children. The analysis follows three specific objectives:
+
+1. Assess the serum levels of calcium, albumin, and phosphate in malaria-infected and non-infected children.  
+2. Compare biochemical parameters across malaria and control groups.  
+3. Determine correlations among parameters within malaria-infected children.
+
+All analyses were performed in **R**, and the steps are detailed below.
+
+---
+
+# Data Cleaning and Preparation
+
+```{r setup, message=FALSE, warning=FALSE}
+library(rio) # for data importation
+library(tidyverse) # for data wragling 
+
+#importing the dataset
+owo <- import("C:/Users/user/Downloads/ola.xlsx")
+glimpse(owo)
+owo <- owo |> 
+  select(!`S/N`) # ro drop s/n
+
+# data cleaning 
+owo <- owo |> 
+  filter(!(is.na(`SAMPLE NUMBER`) | 
+             `SAMPLE NUMBER` == ""))
+colnames(owo) <- c('sampleId', 'age', 'calcium', 'albumin', 'phosphatase')
+View(owo)
+
+# identify and inspect all unique labels in sampleId
+unique(owo$sampleId)
+
+# create a new variable (status)
+owo$status <- case_when(
+  grepl('CONTROL', owo$sampleId, ignore.case = T) ~ 'control', #for control
+  grepl('SAMPLE', owo$sampleId, ignore.case = T) ~ 'malaria',  #for malaria 
+  TRUE ~ NA_character_
+)
+
+# remove std and na 
+owo <- owo |> 
+  filter(!is.na(status))
+glimpse(owo)
+
+#summary data 
+summary(owo)
+table(owo$status)
+
+```
+
+# Descriptive and Comparative Statistics
+
+Descriptive statistics were generated to summarize calcium, albumin, and phosphate levels within each group.
+
+``` {r}
+# statistical analysis 
+#statistical summary. 
+tapply(owo$calcium, owo$status, summary)
+tapply(owo$albumin, owo$status, summary)
+tapply(owo$phosphatase, owo$status, summary)
+tapply(owo$age, owo$status, summary)
+
+# compare parameters across the two status
+# using independent t-test
+calcium <- t.test(calcium ~ status, data = owo) # for calcium 
+albumin <- t.test(albumin ~ status, data = owo) # for albumin
+phosphatase <- t.test(phosphatase ~ status, data = owo) # for phosphatase 
+
+calcium
+albumin
+phosphatase
+
+```
+
+# Correlation Analysis by Malaria infected children only 
+
+``` {r}
+# objective three 
+# correlate among biochemical parameters in malaria children 
+# filter malaria children only 
+malaria <- owo |> 
+  filter(status == 'malaria')
+View(malaria)
+
+# correlations 
+cor_calcium_albumin <- cor.test(malaria$calcium, malaria$albumin)
+cor_calcium_phosphate <- cor.test(malaria$calcium, malaria$phosphatase)
+cor_albumin_phosphate <- cor.test(malaria$albumin, malaria$phosphatase)
+
+cor_calcium_albumin
+cor_calcium_phosphate
+cor_albumin_phosphate
+
+```
+
+# Visualizations 
+
+``` {r}
+# boxplots 
+ggplot(owo, aes(x = status, y = calcium, fill = status)) +
+  geom_boxplot(alpha = 0.7, outlier.color = 'red') +
+  labs(title = 'Serium Calcium by status', y = 'Calcium (mmol/L)', x = 'Status') +
+  theme_minimal(base_size = 14) # calcium
+
+ggplot(owo, aes(x = status, y = albumin, fill = status)) +
+  geom_boxplot(alpha = 0.7, outlier.color = 'red') +
+  labs(title = 'Serium Albumin by status', y = 'Albumin (g/L)', x = 'Status') +
+  theme_minimal(base_size = 14)  # albumin
+
+ggplot(owo, aes(x = status, y = phosphatase, fill = status)) +
+  geom_boxplot(alpha = 0.7, outlier.color = 'red') +
+  labs(title = 'Serium Phosphatase by status', y = 'Phosphatase (mmol/L)', x = 'Status') +
+  theme_minimal(base_size = 14) # phosphatase
+
+# violin and boxplot
+ggplot(owo, aes(status, calcium, fill = status)) +
+  geom_violin(trim = F, alpha = 0.5) +
+  geom_boxplot(width = 0.1, outlier.color = 'red') + 
+  labs(title = 'Distribution of calcium levels', y= 'Calcuim (mmol/L)') +
+  theme_minimal(base_size = 14) # calcium
+
+ggplot(owo, aes(status, albumin, fill = status)) +
+  geom_violin(trim = F, alpha = 0.5) +
+  geom_boxplot(width = 0.1, outlier.color = 'red') + 
+  labs(title = 'Distribution of albumin levels', y= 'albumin (g/L)') +
+  theme_minimal(base_size = 14) # albumin
+
+ggplot(owo, aes(status, phosphatase, fill = status)) +
+  geom_violin(trim = F, alpha = 0.5) +
+  geom_boxplot(width = 0.1, outlier.color = 'red') + 
+  labs(title = 'Distribution of phosphatase levels', y= 'phosphatase (mmol/L)') +
+  theme_minimal(base_size = 14) # phosphatase 
+
+# correlation heatmap malarian infected children only 
+library(reshape2)
+corr_matrix <- round(cor(malaria[, c('calcium', 'albumin', 'phosphatase')], 
+                         use = 'complete.obs'), 2)
+melt_corr <- melt(corr_matrix)
+
+ggplot(melt_corr, aes(Var1, Var2, fill = value)) +
+  geom_tile(color = 'white') +
+  geom_text(aes(label = value), size = 5) +
+  scale_fill_gradient2(low = 'blue', high = 'red', mid = 'white', midpoint = 0, limit = c(-1, 1)) +
+  labs(title = 'Correlation heatmap of malaria') +
+  theme_minimal(base_size = 14)
+
+# scatterplots 
+ggplot(malaria, aes(calcium, albumin)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = 'lm', se = F, color = 'red') +
+  labs(title = 'Calcium vs Albumin (malaria)')
+
+ggplot(malaria, aes(calcium, phosphatase)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = 'lm', se = F, color = 'red') +
+  labs(title = 'Calcium vs phophatase (malaria)')
+
+ggplot(malaria, aes(albumin, phosphatase)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = 'lm', se = F, color = 'red') +
+  labs(title = 'albumin vs phophatase (malaria)')
+
+# density plots 
+ggplot(owo, aes(calcium, status)) +
+  geom_density(alpha = 0.5) +
+  labs(title = 'Density Plot of Serium Calcium Levels') +
+  theme_minimal(base_size = 14)
+
+```
+
+# Conclusion
+
+This analysis successfully:
+
+Cleaned and standardized the dataset.
+
+Computed descriptive statistics for biochemical markers.
+
+Conducted group comparisons between malaria-infected and non-infected children.
+
+Evaluated correlations among parameters within the malaria-infected group.
+
+These results can now be used directly to write the Chapter Four (Results) of the project.
+
+# Appendix
+
+Full dataset dimensions:
+
+``` {r}
+dim(owo)
+owo
+glimpse(owo)
+str(owo)
+summary(owo)
+```
+
+# About me 
+
+Abdul-Baasit Ismail is a passionate Biochemistry and Molecular Biology student. Data Scientist and AI/ML Practitioner with strong experience in data cleaning, statistical analysis, predictive modelling, and applied machine learning. He works confidently with tools such as R, Python, SQL, and modern ML frameworks, delivering clean, reproducible analysis and data-driven insights.
+
+He is particularly skilled at transforming raw, inconsistent datasets into meaningful patterns, building practical models, and communicating findings clearly through visualisations and reports. His work blends analytical rigour with creativity, enabling teams to make smarter, evidence-based decisions.
+
+Abdul-Baasit is open to collaboration, research projects, internships, freelance roles, or data-driven problem-solving opportunities—especially in machine learning, AI applications, bioinformatics, health analytics, and data science automation.
+
+If you’re looking for someone who combines technical depth, fast learning, and professional execution, you should definitely reach out.
